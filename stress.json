@@ -1,5 +1,6 @@
 [
     {"name":"busybox", "args": ["true"]},
-    {"name":"busybox", "args": ["ping", "-c", "5", "google.com"]},
-    {"name":"busybox", "flags": ["--log-driver=syslog"], "args": ["ping", "-c", "5", "google.com"]}
+    {"name":"busybox", "args": ["sleep", "2"]},
+    {"name":"busybox", "args": ["sleep", "4"], "kill": true},
+    {"name":"busybox", "args": ["sleep", "6"], "kill": true}
 ]

@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -57,7 +56,12 @@ func (w *worker) run(i *Image) {
 		p = "-P=true"
 	}
 
-	command := []string{"run", p, "--rm"}
+	command := []string{"run", p}
+	if i.Kill {
+		command = append(command, "-d")
+	} else {
+		command = append(command, "--rm")
+	}
 	if len(i.Flags) > 0 {
 		flags := []string{}
 
@@ -72,20 +76,31 @@ func (w *worker) run(i *Image) {
 	command = append(command, i.Name)
 	command = append(command, i.Args...)
 	cmd := exec.Command(w.binary, command...)
-	if i.Kill {
-		go func() {
-			<-time.After(w.killTime)
-			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-				logrus.Error(err)
-			}
-		}()
-	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		mutex.Lock()
 		failures++
 		mutex.Unlock()
 		logrus.WithField("error", err).Errorf("%s", out)
+	}
+	if i.Kill {
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			id := string(out)[:12]
+			<-time.After(w.killTime)
+			wg.Done()
+			if err := exec.Command(w.binary, "kill", id).Run(); err != nil {
+				logrus.Error(err)
+				return
+			}
+			<-time.After(3 * w.killTime)
+			if err := exec.Command(w.binary, "rm", "-f", id).Run(); err != nil {
+				logrus.Error(err)
+				return
+			}
+		}()
+		wg.Wait()
 	}
 }
 
@@ -148,6 +163,7 @@ func main() {
 		seconds := time.Now().Sub(start).Seconds()
 		logrus.Infof("ran %d containers in %0.2f seconds (%0.2f container per sec. or %0.2f sec. per container)", counter, seconds, float64(counter)/seconds, seconds/float64(counter))
 		logrus.Infof("failures %d", failures)
+		time.Sleep(4 * context.GlobalDuration("kill"))
 	}
 	if err := app.Run(os.Args); err != nil {
 		logrus.Fatal(err)
