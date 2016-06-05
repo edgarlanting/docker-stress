@@ -87,6 +87,10 @@ func (w *worker) run(i *Image) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 		go func() {
+			if len(string(out)) < 12 {
+				logrus.Errorf("Expected ID, got %s", string(out))
+				return
+			}
 			id := string(out)[:12]
 			<-time.After(w.killTime)
 			wg.Done()
